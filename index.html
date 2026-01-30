@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contacts App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    :root {
+      --primary: #7c3aed;
+      --secondary: #ec4899;
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text);
+    }
+
+    .app {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+    }
+
+    button {
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background: #e5e7eb;
+      color: #111;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .contact {
+      background: var(--card);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+
+    .contact small {
+      color: var(--muted);
+    }
+
+    .contact-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .contact-actions button {
+      flex: 1;
+      padding: 6px;
+      font-size: 12px;
+    }
+
+    .logout {
+      margin-top: 12px;
+      background: #ef4444;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <h1>📇 Contacts</h1>
+
+    <!-- AUTH -->
+    <div id="auth">
+      <input id="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
+      <button onclick="register()">Register</button>
+      <button class="secondary" onclick="login()">Login</button>
+    </div>
+
+    <!-- CONTACTS -->
+    <div id="contacts" class="hidden">
+      <input id="name" placeholder="Name" />
+      <input id="phone" placeholder="Phone" />
+      <input id="contactEmail" placeholder="Email (optional)" />
+      <button onclick="createContact()">Add Contact</button>
+
+      <div id="list"></div>
+
+      <button class="logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:3000';
+    let token = null;
+    let editingId = null;
+
+    function setAuth(state) {
+      document.getElementById('auth').classList.toggle('hidden', state);
+      document.getElementById('contacts').classList.toggle('hidden', !state);
+    }
+
+    async function register() {
+      await fetch(API + '/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.value,
+          password: password.value
+        })
+      });
+      alert('Registered! Now login.');
+    }
+
+    async function login() {
+      const res = await fetch(API + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.value,
+          password: password.value
+        })
+      });
+
+      const data = await res.json();
+      token = data.token;
+      setAuth(true);
+      loadContacts();
+    }
+
+    async function loadContacts() {
+      const res = await fetch(API + '/contacts', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const contacts = await res.json();
+      list.innerHTML = '';
+      contacts.forEach(renderContact);
+    }
+
+    async function createContact() {
+      if (editingId) {
+        await fetch(API + '/contacts/' + editingId, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            name: name.value,
+            phone: phone.value,
+            email: contactEmail.value
+          })
+        });
+        editingId = null;
+      } else {
+        await fetch(API + '/contacts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            name: name.value,
+            phone: phone.value,
+            email: contactEmail.value
+          })
+        });
+      }
+
+      name.value = phone.value = contactEmail.value = '';
+      loadContacts();
+    }
+
+    function renderContact(c) {
+      const div = document.createElement('div');
+      div.className = 'contact';
+      div.innerHTML = `
+        <strong>${c.name}</strong><br/>
+        <small>${c.phone || ''} ${c.email || ''}</small>
+        <div class="contact-actions">
+          <button onclick='editContact(${JSON.stringify(c)})'>Edit</button>
+          <button onclick='deleteContact(${c.id})'>Delete</button>
+        </div>
+      `;
+      list.appendChild(div);
+    }
+
+    function editContact(c) {
+      editingId = c.id;
+      name.value = c.name;
+      phone.value = c.phone || '';
+      contactEmail.value = c.email || '';
+    }
+
+    async function deleteContact(id) {
+      await fetch(API + '/contacts/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      loadContacts();
+    }
+
+    function logout() {
+      token = null;
+      setAuth(false);
+    }
+  </script>
+</body>
+</html>
